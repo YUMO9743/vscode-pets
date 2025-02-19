@@ -532,6 +532,11 @@ export function petPanelApp(
                         petEl.pet.chase(ballState, canvas);
                     }
                 });
+                stateApi?.postMessage({
+                    command: 'unlock-achievement',
+                    achievementId: 'first_ball',
+                    text: ''
+                });
                 break;
             case 'spawn-pet':
                 allPets.push(
@@ -547,6 +552,11 @@ export function petPanelApp(
                         stateApi,
                     ),
                 );
+                stateApi?.postMessage({
+                    command: 'unlock-achievement',
+                    achievementId: 'pet_collector',
+                    text: ''
+                });
                 saveState(stateApi);
                 break;
 

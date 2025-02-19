@@ -80,10 +80,17 @@ export const enum ColorThemeKind {
 export class WebviewMessage {
     text: string;
     command: string;
+    achievementId?: string;
+    progress?: number;
+    petId?: string;
+    amount?: number;
+    name?: string;
 
-    constructor(text: string, command: string) {
+    constructor(text: string, command: string, achievementId?: string, progress?: number) {
         this.text = text;
         this.command = command;
+        this.achievementId = achievementId;
+        this.progress = progress;
     }
 }
 

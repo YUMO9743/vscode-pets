@@ -15,6 +15,9 @@ import {
 import { randomName } from '../common/names';
 import * as localize from '../common/localize';
 import { availableColors, normalizeColor } from '../panel/pets';
+import { AchievementSystem } from '../common/achievements';
+let achievementSystem: AchievementSystem;
+
 
 const EXTRA_PETS_KEY = 'vscode-pets.extra-pets';
 const EXTRA_PETS_KEY_TYPES = EXTRA_PETS_KEY + '.types';
@@ -25,6 +28,7 @@ const DEFAULT_COLOR = PetColor.brown;
 const DEFAULT_PET_TYPE = PetType.cat;
 const DEFAULT_POSITION = ExtPosition.panel;
 const DEFAULT_THEME = Theme.none;
+
 
 class PetQuickPickItem implements vscode.QuickPickItem {
     constructor(
@@ -283,6 +287,18 @@ function getWebview(): vscode.Webview | undefined {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    achievementSystem = new AchievementSystem(context);
+
+
+    // Register feed pet command
+
+    // Register the achievement viewing command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('vscode-pets.showAchievements', async () => {
+            await achievementSystem.showAchievements();
+        })
+    );
+    
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.start', async () => {
             if (
@@ -315,6 +331,8 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
         }),
+
+        
     );
 
     spawnPetStatusBar = vscode.window.createStatusBarItem(
@@ -698,6 +716,8 @@ interface IPetPanel {
     updatePetType(newType: PetType): void;
     updatePetSize(newSize: PetSize): void;
     updateTheme(newTheme: Theme, themeKind: vscode.ColorThemeKind): void;
+    updatePetStats(petName: string): void;
+    listPets(): void;
     update(): void;
     setThrowWithMouse(newThrowWithMouse: boolean): void;
 }
@@ -711,7 +731,12 @@ class PetWebviewContainer implements IPetPanel {
     protected _theme: Theme;
     protected _themeKind: vscode.ColorThemeKind;
     protected _throwBallWithMouse: boolean;
-
+    public updatePetStats(petName: string): void {
+        void this.getWebview().postMessage({
+            command: 'update-pet-stats',
+            name: petName
+        });
+    }
     constructor(
         extensionUri: vscode.Uri,
         color: PetColor,
@@ -875,10 +900,10 @@ class PetWebviewContainer implements IPetPanel {
         const nonce = getNonce();
 
         return `<!DOCTYPE html>
-			<html lang="en">
-			<head>
-				<meta charset="UTF-8">
-				<!--
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <!--
 					Use a content security policy to only allow loading images from https or from our extension directory,
 					and only allow scripts that have a specific nonce.
 				-->
@@ -888,36 +913,95 @@ class PetWebviewContainer implements IPetPanel {
             webview.cspSource
         } https:; script-src 'nonce-${nonce}';
                 font-src ${webview.cspSource};">
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-				<link href="${stylesResetUri}" rel="stylesheet" nonce="${nonce}">
-				<link href="${stylesMainUri}" rel="stylesheet" nonce="${nonce}">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link href="${stylesResetUri}" rel="stylesheet" nonce="${nonce}">
+                <link href="${stylesMainUri}" rel="stylesheet" nonce="${nonce}">
                 <style nonce="${nonce}">
-                @font-face {
-                    font-family: 'silkscreen';
-                    src: url('${silkScreenFontPath}') format('truetype');
-                }
+                    @font-face {
+                        font-family: 'silkscreen';
+                        src: url('${silkScreenFontPath}') format('truetype');
+                    }
+                    
+                    /* Add experience bar styles */
+                    .pet-exp-container {
+                        position: absolute;
+                        bottom: -20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        width: 40px;
+                        background: rgba(0, 0, 0, 0.5);
+                        border-radius: 4px;
+                        padding: 2px;
+                        z-index: 1000;
+                    }
+
+                    .exp-bar {
+                        width: 100%;
+                        height: 4px;
+                        background: rgba(255, 255, 255, 0.2);
+                        border-radius: 2px;
+                        overflow: hidden;
+                    }
+
+                    .exp-text {
+                        color: white;
+                        font-size: 8px;
+                        text-align: center;
+                        margin-bottom: 2px;
+                        text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+                    }
+
+                    .exp-progress {
+                        height: 100%;
+                        background: #4CAF50;
+                        transition: width 0.3s ease;
+                    }
+
+                    /* Make sure collision div can contain the exp bar */
+                    .collision {
+                        position: relative;
+                    }
                 </style>
-				<title>VS Code Pets</title>
-			</head>
-			<body>
-				<canvas id="petCanvas"></canvas>
-				<div id="petsContainer"></div>
-				<div id="foreground"></div>	
-				<script nonce="${nonce}" src="${scriptUri}"></script>
-				<script nonce="${nonce}">petApp.petPanelApp("${basePetUri}", "${this.theme()}", ${this.themeKind()}, "${this.petColor()}", "${this.petSize()}", "${this.petType()}", ${this.throwBallWithMouse()});</script>
-			</body>
-			</html>`;
+                <title>VS Code Pets</title>
+            </head>
+            <body>
+                <canvas id="petCanvas"></canvas>
+                <div id="petsContainer"></div>
+                <div id="foreground"></div>    
+                <script nonce="${nonce}" src="${scriptUri}"></script>
+                <script nonce="${nonce}">petApp.petPanelApp("${basePetUri}", "${this.theme()}", ${this.themeKind()}, "${this.petColor()}", "${this.petSize()}", "${this.petType()}", ${this.throwBallWithMouse()});</script>
+            </body>
+            </html>`;
     }
 }
 
-function handleWebviewMessage(message: WebviewMessage) {
+async function handleWebviewMessage(message: WebviewMessage) {
     switch (message.command) {
         case 'alert':
-            void vscode.window.showErrorMessage(message.text);
+            await vscode.window.showErrorMessage(message.text);
             return;
         case 'info':
-            void vscode.window.showInformationMessage(message.text);
+            await vscode.window.showInformationMessage(message.text);
             return;
+        case 'unlock-achievement':
+            if (achievementSystem && typeof message.achievementId === 'string') {
+                console.log('Attempting to unlock achievement:', message.achievementId);
+                await achievementSystem.unlockAchievement(message.achievementId);
+                // Add debug logging after unlock
+                console.log('Achievement unlocked and saved');
+            }
+            break;
+        
+        case 'update-achievement-progress':
+            if (achievementSystem && 
+                typeof message.achievementId === 'string' && 
+                typeof message.progress === 'number') {
+                console.log('Updating achievement progress:', message.achievementId, message.progress);
+                await achievementSystem.updateProgress(message.achievementId, message.progress);
+                // Add debug logging after update
+                console.log('Achievement progress updated and saved');
+            }
+            break;
     }
 }
 
@@ -933,6 +1017,8 @@ class PetPanel extends PetWebviewContainer implements IPetPanel {
     public static readonly viewType = 'petCoding';
 
     private readonly _panel: vscode.WebviewPanel;
+    
+
 
     public static createOrShow(
         extensionUri: vscode.Uri,
@@ -1066,9 +1152,11 @@ class PetPanel extends PetWebviewContainer implements IPetPanel {
 
         // Handle messages from the webview
         this._panel.webview.onDidReceiveMessage(
-            handleWebviewMessage,
+            async (message) => {
+                await handleWebviewMessage(message);
+            },
             null,
-            this._disposables,
+            this._disposables
         );
     }
 
@@ -1099,7 +1187,6 @@ class PetPanel extends PetWebviewContainer implements IPetPanel {
 
 class PetWebviewViewProvider extends PetWebviewContainer {
     public static readonly viewType = 'petsView';
-
     private _webviewView?: vscode.WebviewView;
 
     resolveWebviewView(webviewView: vscode.WebviewView): void | Thenable<void> {
@@ -1109,9 +1196,11 @@ class PetWebviewViewProvider extends PetWebviewContainer {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         webviewView.webview.onDidReceiveMessage(
-            handleWebviewMessage,
+            async (message) => {
+                await handleWebviewMessage(message);
+            },
             null,
-            this._disposables,
+            this._disposables
         );
     }
 

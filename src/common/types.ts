@@ -77,6 +77,15 @@ export const enum ColorThemeKind {
     highContrast = 3,
 }
 
+export interface PetStats {
+    level: number;
+    experience: number;
+}
+
+export interface BackpackState {
+    food: number;
+}
+
 export class WebviewMessage {
     text: string;
     command: string;
@@ -85,6 +94,11 @@ export class WebviewMessage {
     petId?: string;
     amount?: number;
     name?: string;
+    // Add new properties
+    petStats?: PetStats;
+    foodCount?: number;
+    backpackOperation?: 'show' | 'feed';
+    currentFood?: number;
 
     constructor(text: string, command: string, achievementId?: string, progress?: number) {
         this.text = text;

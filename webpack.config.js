@@ -24,11 +24,15 @@ const desktopConfig = {
     })
   ],
   resolve: {
-    extensions: [".ts", ".tsx", ".js"],
+	extensions: [".ts", ".tsx", ".js", ".jsx"],  // 添加 .tsx 和 .jsx
+	alias: {
+		'react': 'preact/compat',
+		'react-dom': 'preact/compat'
+	}
   },
   module: {
     rules: [{
-      test: /\.ts$/,
+      test: /\.(ts|tsx)$/,
       exclude: /node_modules/,
       use: [
           {

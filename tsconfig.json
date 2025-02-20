@@ -4,7 +4,13 @@
         "strictNullChecks": true,
         "outDir": "./.build-out",
         "lib": ["es2016", "dom"],
-        "target": "esnext"
+        "target": "esnext",
+        "jsx": "react",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true
     },
     "include": ["src"]
 }

@@ -11,11 +11,13 @@ import {
     ALL_PETS,
     ALL_SCALES,
     ALL_THEMES,
+    BackpackState,
 } from '../common/types';
 import { randomName } from '../common/names';
 import * as localize from '../common/localize';
 import { availableColors, normalizeColor } from '../panel/pets';
 import { AchievementSystem } from '../common/achievements';
+const BACKPACK_STATE_KEY = 'vscode-pets.backpack-state';
 let achievementSystem: AchievementSystem;
 
 
@@ -287,11 +289,52 @@ function getWebview(): vscode.Webview | undefined {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+    // Add to activate function
+    let backpackState = context.globalState.get<BackpackState>(BACKPACK_STATE_KEY, { food: 4 });
+    async function handleBackpackMessages(message: WebviewMessage) {
+        switch (message.command) {
+            case 'feed-pet':
+                if (backpackState.food > 0) {
+                    backpackState.food--;
+                    await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
+                    const panel = getPetPanel();
+                    if (panel && message.petId) {
+                        panel.feedPet(message.petId);
+                        panel.updateBackpack(backpackState.food);
+                    }
+                }
+                break;
+        }
+    }
+    context.subscriptions.push(
+        vscode.commands.registerCommand('vscode-pets.show-backpack', async () => {
+            const panel = getPetPanel();
+            if (panel) {
+                panel.showBackpack();
+                panel.updateBackpack(backpackState.food);
+            }
+        })
+    );
+    if (PetPanel.currentPanel) {
+        PetPanel.currentPanel.getWebview().onDidReceiveMessage(
+            async (message) => {
+                await handleBackpackMessages(message);
+            },
+            undefined,
+            context.subscriptions
+        );
+    }
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('vscode-pets.feed-pet', async () => {
+            const panel = getPetPanel();
+            if (panel !== undefined) {
+                panel.listPetsForFeeding();
+            }
+        })
+    );
+
     achievementSystem = new AchievementSystem(context);
-
-
-    // Register feed pet command
-
     // Register the achievement viewing command
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.showAchievements', async () => {
@@ -720,6 +763,10 @@ interface IPetPanel {
     listPets(): void;
     update(): void;
     setThrowWithMouse(newThrowWithMouse: boolean): void;
+    //added
+    showBackpack(): void;
+    updateBackpack(foodCount: number): void;
+    feedPet(petName: string): void;
 }
 
 class PetWebviewContainer implements IPetPanel {
@@ -731,6 +778,32 @@ class PetWebviewContainer implements IPetPanel {
     protected _theme: Theme;
     protected _themeKind: vscode.ColorThemeKind;
     protected _throwBallWithMouse: boolean;
+
+
+    public showBackpack(): void {
+        void this.getWebview().postMessage({
+            command: 'show-backpack'
+        });
+    }
+    
+    public updateBackpack(foodCount: number): void {
+        void this.getWebview().postMessage({
+            command: 'update-backpack',
+            foodCount: foodCount
+        });
+    }
+    
+    public feedPet(petName: string): void {
+        const pet = allPets.locate(petName);
+        if (pet) {
+            pet.addExperience(5);
+            void this.getWebview().postMessage({
+                command: 'pet-fed',
+                petName: petName
+            });
+        }
+    }
+
     public updatePetStats(petName: string): void {
         void this.getWebview().postMessage({
             command: 'update-pet-stats',
@@ -932,7 +1005,6 @@ class PetWebviewContainer implements IPetPanel {
                         background: rgba(0, 0, 0, 0.5);
                         border-radius: 4px;
                         padding: 2px;
-                        z-index: 1000;
                     }
 
                     .exp-bar {
@@ -943,18 +1015,17 @@ class PetWebviewContainer implements IPetPanel {
                         overflow: hidden;
                     }
 
+                    .exp-progress {
+                        height: 100%;
+                        background: #4CAF50;
+                        transition: width 0.3s ease;
+                    }
+
                     .exp-text {
                         color: white;
                         font-size: 8px;
                         text-align: center;
                         margin-bottom: 2px;
-                        text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
-                    }
-
-                    .exp-progress {
-                        height: 100%;
-                        background: #4CAF50;
-                        transition: width 0.3s ease;
                     }
 
                     /* Make sure collision div can contain the exp bar */
@@ -1000,6 +1071,15 @@ async function handleWebviewMessage(message: WebviewMessage) {
                 await achievementSystem.updateProgress(message.achievementId, message.progress);
                 // Add debug logging after update
                 console.log('Achievement progress updated and saved');
+            }
+            break;
+        
+        case 'feed-pet':
+            if (backpackState.food > 0) {
+                backpackState.food--;
+                await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
+                this.feedPet(message.petName);
+                this.updateBackpack(backpackState.food);
             }
             break;
     }

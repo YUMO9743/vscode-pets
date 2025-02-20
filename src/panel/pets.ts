@@ -1,4 +1,4 @@
-import { PetColor, PetSize, PetSpeed, PetType } from '../common/types';
+import { PetColor, PetSize, PetSpeed, PetStats, PetType } from '../common/types';
 import { Cat } from './pets/cat';
 import { Chicken } from './pets/chicken';
 import { Clippy } from './pets/clippy';
@@ -26,6 +26,43 @@ export class PetElement {
     pet: IPetType;
     color: PetColor;
     type: PetType;
+
+    stats: PetStats = {
+        level: 1,
+        experience: 0
+    };
+
+    addExperience(amount: number) {
+        this.stats.experience += amount;
+        if (this.stats.experience >= this.stats.level * 20) {
+            this.stats.level++;
+            this.stats.experience = 0;
+            this.updateExperienceBar();
+        }
+    }
+
+    updateExperienceBar() {
+        const expContainer = document.createElement('div');
+        expContainer.className = 'pet-exp-container';
+        
+        const expText = document.createElement('div');
+        expText.className = 'exp-text';
+        expText.textContent = `Lvl ${this.stats.level}`;
+        
+        const expBar = document.createElement('div');
+        expBar.className = 'exp-bar';
+        
+        const expProgress = document.createElement('div');
+        expProgress.className = 'exp-progress';
+        expProgress.style.width = `${(this.stats.experience / (this.stats.level * 20)) * 100}%`;
+        
+        expBar.appendChild(expProgress);
+        expContainer.appendChild(expText);
+        expContainer.appendChild(expBar);
+        
+        this.collision.appendChild(expContainer);
+    }
+    
     remove() {
         this.el.remove();
         this.collision.remove();

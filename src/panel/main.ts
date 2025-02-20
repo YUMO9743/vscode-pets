@@ -1,5 +1,8 @@
 // This script will be run within the webview itself
 import { randomName } from '../common/names';
+import React, { useState, useEffect } from 'react';
+import Backpack from './components/Backpack';
+
 import {
     PetSize,
     PetColor,
@@ -28,6 +31,64 @@ declare global {
     }
     function acquireVsCodeApi(): VscodeStateApi;
 }
+
+
+
+
+const PetApp = () => {
+    const [isBackpackOpen, setIsBackpackOpen] = useState(false);
+    const [foodCount, setFoodCount] = useState(4);
+    const [pets, setPets] = useState([]);
+    const vscode = acquireVsCodeApi();
+
+    useEffect(() => {
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+            switch (message.command) {
+                case 'update-backpack':
+                    setFoodCount(message.foodCount);
+                    break;
+                case 'update-pets':
+                    setPets(message.pets);
+                    break;
+                case 'show-backpack':
+                    setIsBackpackOpen(true);
+                    break;
+            }
+        });
+    }, []);
+
+    const handleFeedPet = (petName: string) => {
+        if (foodCount > 0) {
+            vscode.postMessage({
+                command: 'feed-pet',
+                petName: petName
+            });
+            setFoodCount(prev => prev - 1);
+        }
+    };
+
+    return (
+        <>
+            <div id="petsContainer" />
+            <canvas id="petCanvas" />
+            <div id="foreground" />
+            
+            <Backpack 
+                isOpen={isBackpackOpen}
+                onClose={() => setIsBackpackOpen(false)}
+                foodCount={foodCount}
+                onFeed={handleFeedPet}
+                pets={pets}
+            />
+        </>
+    );
+};
+
+export default PetApp;
+
+
+
 
 export var allPets: IPetCollection = new PetCollection();
 var petCounter: number;

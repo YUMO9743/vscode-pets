@@ -794,14 +794,14 @@ class PetWebviewContainer implements IPetPanel {
     public showBackpack(): void {
         void this.getWebview().postMessage({
             command: 'show-backpack'
-        });
+        } as WebviewMessage);
     }
     
     public updateBackpack(foodCount: number): void {
         void this.getWebview().postMessage({
             command: 'update-backpack',
             foodCount: foodCount
-        });
+        } as WebviewMessage);
     }
     
     public feedPet(petName: string): void {

@@ -62,7 +62,8 @@ const PetApp = () => {
         if (foodCount > 0) {
             vscode.postMessage({
                 command: 'feed-pet',
-                petName: petName
+                petName: petName,
+                text: `Feeding ${petName}`
             });
             setFoodCount(prev => prev - 1);
         }

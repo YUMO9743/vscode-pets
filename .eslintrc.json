@@ -22,5 +22,19 @@
         "prefer-const": "error",
         "@typescript-eslint/no-non-null-assertion": "warn",
         "@typescript-eslint/no-floating-promises": "warn"
-    }
+    },
+    "overrides": [
+        {
+            "files": ["webpack.config.js"],
+            "env": {
+                "node": true
+            },
+            "parserOptions": {
+                "project": null  // 对于这个文件不使用 TypeScript 配置
+            },
+            "rules": {
+                "@typescript-eslint/no-var-requires": "off"
+            }
+        }
+    ]
 }

@@ -64,6 +64,10 @@ export class PetElement {
     }
     
     remove() {
+        this.stats = {
+            level: 1,
+            experience: 0
+        };
         this.el.remove();
         this.collision.remove();
         this.speech.remove();

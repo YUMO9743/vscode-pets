@@ -87,7 +87,7 @@ export interface BackpackState {
 }
 
 export class WebviewMessage {
-    text: string;
+    text!: string;
     command: string;
     achievementId?: string;
     progress?: number;
@@ -95,14 +95,18 @@ export class WebviewMessage {
     amount?: number;
     name?: string;
     // Add new properties
+    petName?: string;
     petStats?: PetStats;
     foodCount?: number;
     backpackOperation?: 'show' | 'feed';
     currentFood?: number;
 
-    constructor(text: string, command: string, achievementId?: string, progress?: number) {
-        this.text = text;
-        this.command = command;
+    constructor(command: string, text?: string, achievementId?: string, progress?: number) {
+
+        this.command = command;        
+        if (text) {
+            this.text = text;
+        }
         this.achievementId = achievementId;
         this.progress = progress;
     }

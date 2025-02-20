@@ -8,7 +8,7 @@ const desktopConfig = {
   mode: "development",
   devtool: "inline-source-map",
   entry: {
-    main: "./src/panel/main.ts",
+    main: "./src/panel/main.tsx",
   },
   output: {
     path: path.resolve(__dirname, './media'),

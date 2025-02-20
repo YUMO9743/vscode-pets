@@ -17,8 +17,11 @@ import { randomName } from '../common/names';
 import * as localize from '../common/localize';
 import { availableColors, normalizeColor } from '../panel/pets';
 import { AchievementSystem } from '../common/achievements';
+import { IPetCollection, PetCollection } from '../panel/pets';
 const BACKPACK_STATE_KEY = 'vscode-pets.backpack-state';
 let achievementSystem: AchievementSystem;
+let backpackState = { food: 4 };
+let petCollection: IPetCollection;
 
 
 const EXTRA_PETS_KEY = 'vscode-pets.extra-pets';
@@ -290,7 +293,8 @@ function getWebview(): vscode.Webview | undefined {
 
 export function activate(context: vscode.ExtensionContext) {
     // Add to activate function
-    let backpackState = context.globalState.get<BackpackState>(BACKPACK_STATE_KEY, { food: 4 });
+    petCollection = new PetCollection();
+    backpackState = context.globalState.get<BackpackState>(BACKPACK_STATE_KEY, { food: 4 });
     async function handleBackpackMessages(message: WebviewMessage) {
         switch (message.command) {
             case 'feed-pet':
@@ -767,6 +771,7 @@ interface IPetPanel {
     showBackpack(): void;
     updateBackpack(foodCount: number): void;
     feedPet(petName: string): void;
+    listPetsForFeeding(): void;
 }
 
 class PetWebviewContainer implements IPetPanel {
@@ -779,6 +784,12 @@ class PetWebviewContainer implements IPetPanel {
     protected _themeKind: vscode.ColorThemeKind;
     protected _throwBallWithMouse: boolean;
 
+
+    public listPetsForFeeding(): void {
+        void this.getWebview().postMessage({
+            command: 'list-pets-for-feeding'
+        } as WebviewMessage);
+    }
 
     public showBackpack(): void {
         void this.getWebview().postMessage({
@@ -794,7 +805,7 @@ class PetWebviewContainer implements IPetPanel {
     }
     
     public feedPet(petName: string): void {
-        const pet = allPets.locate(petName);
+        const pet = petCollection.locate(petName);
         if (pet) {
             pet.addExperience(5);
             void this.getWebview().postMessage({
@@ -1077,9 +1088,11 @@ async function handleWebviewMessage(message: WebviewMessage) {
         case 'feed-pet':
             if (backpackState.food > 0) {
                 backpackState.food--;
-                await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
-                this.feedPet(message.petName);
-                this.updateBackpack(backpackState.food);
+                const panel = getPetPanel();
+                if (panel && message.petName) {
+                    panel.feedPet(message.petName);
+                    panel.updateBackpack(backpackState.food);
+                }
             }
             break;
     }

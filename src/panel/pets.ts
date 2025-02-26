@@ -33,34 +33,83 @@ export class PetElement {
     };
 
     addExperience(amount: number) {
+        console.log(`Adding ${amount} experience to ${this.pet.name}`);
         this.stats.experience += amount;
+        
         if (this.stats.experience >= this.stats.level * 20) {
             this.stats.level++;
             this.stats.experience = 0;
-            this.updateExperienceBar();
+            console.log(`${this.pet.name} leveled up to level ${this.stats.level}!`);
         }
+        
+        this.updateExperienceBar();
     }
-
+    
     updateExperienceBar() {
+        console.log(`Updating experience bar for ${this.pet.name}`);
+        
+        // Remove existing bar if present
+        const existingBar = this.collision.querySelector('.pet-exp-container');
+        if (existingBar) {
+            existingBar.remove();
+        }
+        
+        // Create new experience bar container
         const expContainer = document.createElement('div');
         expContainer.className = 'pet-exp-container';
+        expContainer.style.position = 'absolute';
+        expContainer.style.bottom = '-20px';
+        expContainer.style.left = '50%';
+        expContainer.style.transform = 'translateX(-50%)';
+        expContainer.style.width = '40px';
+        expContainer.style.background = 'rgba(0, 0, 0, 0.5)';
+        expContainer.style.borderRadius = '4px';
+        expContainer.style.padding = '2px';
+        expContainer.style.zIndex = '100';
         
+        // Create level text
         const expText = document.createElement('div');
         expText.className = 'exp-text';
+        expText.style.color = 'white';
+        expText.style.fontSize = '8px';
+        expText.style.textAlign = 'center';
+        expText.style.marginBottom = '2px';
         expText.textContent = `Lvl ${this.stats.level}`;
         
+        // Create progress bar background
         const expBar = document.createElement('div');
         expBar.className = 'exp-bar';
+        expBar.style.width = '100%';
+        expBar.style.height = '4px';
+        expBar.style.background = 'rgba(255, 255, 255, 0.2)';
+        expBar.style.borderRadius = '2px';
+        expBar.style.overflow = 'hidden';
         
+        // Create progress bar fill
         const expProgress = document.createElement('div');
         expProgress.className = 'exp-progress';
-        expProgress.style.width = `${(this.stats.experience / (this.stats.level * 20)) * 100}%`;
+        expProgress.style.height = '100%';
+        expProgress.style.background = '#4CAF50';
+        expProgress.style.transition = 'width 0.3s ease';
         
+        // Calculate width percentage based on current experience
+        const progressPercent = (this.stats.experience / (this.stats.level * 20)) * 100;
+        expProgress.style.width = `${progressPercent}%`;
+        
+        // Assemble experience bar
         expBar.appendChild(expProgress);
         expContainer.appendChild(expText);
         expContainer.appendChild(expBar);
         
+        // Make sure collision element has the right position
+        if (this.collision.style.position !== 'relative' && 
+            this.collision.style.position !== 'absolute') {
+            this.collision.style.position = 'relative';
+        }
+        
+        // Add to the DOM
         this.collision.appendChild(expContainer);
+        console.log('Experience bar updated');
     }
     
     remove() {

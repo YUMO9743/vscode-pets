@@ -24,12 +24,17 @@ import { BallState, PetElementState, PetPanelState } from './states';
 
 /* This is how the VS Code API can be invoked from the panel */
 declare global {
+    interface Window {
+        feedPet: (petName: string) => void;
+    }
+
     interface VscodeStateApi {
         getState(): PetPanelState | undefined; // API is actually Any, but we want it to be typed.
         setState(state: PetPanelState): void;
         postMessage(message: WebviewMessage): void;
     }
     function acquireVsCodeApi(): VscodeStateApi;
+
 }
 
 
@@ -336,6 +341,13 @@ function recoverState(
     });
 }
 
+console.log('Initializing experience bars for all pets');
+setTimeout(() => {
+    allPets.pets.forEach(pet => {
+        pet.updateExperienceBar();
+    });
+}, 1000);
+
 function randomStartPosition(): number {
     return Math.floor(Math.random() * (window.innerWidth * 0.7));
 }
@@ -357,6 +369,90 @@ function initCanvas() {
     ctx.canvas.height = window.innerHeight;
 }
 
+function createCustomModal(title: string, content: string, buttons: Array<{text: string, onClick: () => void}> = []) {
+    // Remove any existing modal
+    const existingModal = document.getElementById('custom-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modalContainer = document.createElement('div');
+    modalContainer.id = 'custom-modal';
+    modalContainer.style.position = 'fixed';
+    modalContainer.style.top = '0';
+    modalContainer.style.left = '0';
+    modalContainer.style.width = '100%';
+    modalContainer.style.height = '100%';
+    modalContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    modalContainer.style.display = 'flex';
+    modalContainer.style.justifyContent = 'center';
+    modalContainer.style.alignItems = 'center';
+    modalContainer.style.zIndex = '1000';
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.backgroundColor = '#fff';
+    modalContent.style.padding = '20px';
+    modalContent.style.borderRadius = '8px';
+    modalContent.style.maxWidth = '80%';
+    modalContent.style.maxHeight = '80%';
+    modalContent.style.overflow = 'auto';
+    modalContent.style.color = '#333';
+    
+    const modalHeader = document.createElement('div');
+    modalHeader.style.marginBottom = '15px';
+    modalHeader.style.paddingBottom = '10px';
+    modalHeader.style.borderBottom = '1px solid #eee';
+    modalHeader.style.display = 'flex';
+    modalHeader.style.justifyContent = 'space-between';
+    
+    const modalTitle = document.createElement('h2');
+    modalTitle.textContent = title;
+    modalTitle.style.margin = '0';
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '×';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.onclick = () => modalContainer.remove();
+    
+    modalHeader.appendChild(modalTitle);
+    modalHeader.appendChild(closeButton);
+    
+    const modalBody = document.createElement('div');
+    modalBody.innerHTML = content;
+    
+    const modalFooter = document.createElement('div');
+    modalFooter.style.marginTop = '15px';
+    modalFooter.style.paddingTop = '10px';
+    modalFooter.style.borderTop = '1px solid #eee';
+    modalFooter.style.display = 'flex';
+    modalFooter.style.justifyContent = 'flex-end';
+    
+    buttons.forEach(button => {
+        const btnElement = document.createElement('button');
+        btnElement.textContent = button.text;
+        btnElement.style.marginLeft = '10px';
+        btnElement.style.padding = '8px 12px';
+        btnElement.style.cursor = 'pointer';
+        btnElement.style.backgroundColor = '#007bff';
+        btnElement.style.color = 'white';
+        btnElement.style.border = 'none';
+        btnElement.style.borderRadius = '4px';
+        btnElement.onclick = () => {
+            button.onClick();
+            modalContainer.remove();
+        };
+        modalFooter.appendChild(btnElement);
+    });
+    
+    modalContent.appendChild(modalHeader);
+    modalContent.appendChild(modalBody);
+    modalContent.appendChild(modalFooter);
+    modalContainer.appendChild(modalContent);
+    
+    document.body.appendChild(modalContainer);
+}
+
 // It cannot access the main VS Code APIs directly.
 export function petPanelApp(
     basePetUri: string,
@@ -370,6 +466,9 @@ export function petPanelApp(
 ) {
     const ballRadius: number = calculateBallRadius(petSize);
     var floor = 0;
+
+    const backpackState = { food: 4 };
+    
     if (!stateApi) {
         stateApi = acquireVsCodeApi();
     }
@@ -634,6 +733,101 @@ export function petPanelApp(
                 });
                 break;
 
+            case 'show-backpack':
+                console.log('Show backpack command received');
+                createCustomModal(
+                    '🎒 Backpack',
+                    `<div style="font-size: 16px; margin-bottom: 15px;">
+                        <p style="margin-bottom: 10px;"><strong>Food Items:</strong></p>
+                        <p>🍖 Food: ${backpackState.food}</p>
+                    </div>`,
+                    [{ text: 'Close', onClick: () => {} }]
+                );
+                break;
+                
+            case 'update-backpack':
+                console.log('Update backpack command received:', message.foodCount);
+                if (typeof message.foodCount === 'number') {
+                    backpackState.food = message.foodCount;
+                }
+                break;
+                
+            case 'list-pets-for-feeding':
+                console.log('List pets for feeding command received');
+                const petsForFeeding = allPets.pets;
+                
+                if (petsForFeeding.length === 0) {
+                    createCustomModal(
+                        'Feed Pet',
+                        '<p>No pets available to feed!</p>',
+                        [{ text: 'OK', onClick: () => {} }]
+                    );
+                    return;
+                }
+                
+                if (backpackState.food <= 0) {
+                    createCustomModal(
+                        'Feed Pet',
+                        '<p>You have no food left in your backpack!</p>',
+                        [{ text: 'OK', onClick: () => {} }]
+                    );
+                    return;
+                }
+                
+                let petListHtml = '<p style="margin-bottom: 15px;">Select a pet to feed:</p><div style="display: flex; flex-direction: column;">';
+                
+                petsForFeeding.forEach((pet) => {
+                    petListHtml += `<button 
+                        style="margin-bottom: 10px; padding: 8px; text-align: left; cursor: pointer; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px;"
+                        onclick="window.feedPet('${pet.pet.name}')"
+                    >${pet.pet.name} (${pet.color} ${pet.type})</button>`;
+                });
+                
+                petListHtml += '</div>';
+                
+                // Create a global function that the buttons can call
+                window.feedPet = (petName) => {
+                    console.log('Feed pet clicked for:', petName);
+                    stateApi?.postMessage({
+                        command: 'feed-pet',
+                        petName: petName,
+                        text: `Feeding ${petName}`
+                    });
+                    
+                    // Close any existing modal
+                    const existingModal = document.getElementById('custom-modal');
+                    if (existingModal) existingModal.remove();
+                };
+                
+                createCustomModal(
+                    '🍖 Feed a Pet',
+                    petListHtml,
+                    [{ text: 'Cancel', onClick: () => {} }]
+                );
+                break;
+                    
+
+            case 'pet-fed':
+                console.log('Pet fed command received:', message.petName);
+                if (message.petName) {
+                    const fedPet = allPets.locate(message.petName);
+                    if (fedPet) {
+                        fedPet.addExperience(5);
+                        fedPet.updateExperienceBar();
+                        fedPet.pet.showSpeechBubble('😋', 2000);
+                        console.log(`${message.petName} gained 5 experience!`);
+                        
+                        createCustomModal(
+                            'Pet Fed',
+                            `<p>${message.petName} has been fed and gained 5 experience points!</p>
+                                <p>Current level: ${fedPet.stats.level}</p>
+                                <p>Experience: ${fedPet.stats.experience}/${fedPet.stats.level * 20}</p>`,
+                            [{ text: 'OK', onClick: () => {} }]
+                        );
+                    }
+                }
+                break;
+                
             case 'roll-call':
                 var pets = allPets.pets;
                 // go through every single

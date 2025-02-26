@@ -302,8 +302,8 @@ export function activate(context: vscode.ExtensionContext) {
                     backpackState.food--;
                     await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
                     const panel = getPetPanel();
-                    if (panel && message.petId) {
-                        panel.feedPet(message.petId);
+                    if (panel && message.petName) {
+                        panel.feedPet(message.petName);
                         panel.updateBackpack(backpackState.food);
                     }
                 }
@@ -312,10 +312,14 @@ export function activate(context: vscode.ExtensionContext) {
     }
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.show-backpack', async () => {
+            console.log('Show backpack command triggered');
             const panel = getPetPanel();
             if (panel) {
+                console.log('Sending showBackpack to panel');
                 panel.showBackpack();
                 panel.updateBackpack(backpackState.food);
+            } else {
+                console.log('No panel found');
             }
         })
     );
@@ -331,9 +335,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.feed-pet', async () => {
+            console.log('Feed pet command triggered');
             const panel = getPetPanel();
             if (panel !== undefined) {
+                console.log('Sending listPetsForFeeding to panel');
                 panel.listPetsForFeeding();
+            } else {
+                console.log('No panel found');
             }
         })
     );
@@ -786,22 +794,28 @@ class PetWebviewContainer implements IPetPanel {
 
 
     public listPetsForFeeding(): void {
-        void this.getWebview().postMessage({
+        console.log('Sending list-pets-for-feeding message to webview');
+        const webview = this.getWebview();
+        webview.postMessage({
             command: 'list-pets-for-feeding'
-        } as WebviewMessage);
+        });
     }
 
     public showBackpack(): void {
-        void this.getWebview().postMessage({
+        console.log('Sending show-backpack message to webview');
+        const webview = this.getWebview();
+        webview.postMessage({
             command: 'show-backpack'
-        } as WebviewMessage);
+        });
     }
     
     public updateBackpack(foodCount: number): void {
-        void this.getWebview().postMessage({
+        console.log('Sending update-backpack message with food count:', foodCount);
+        const webview = this.getWebview();
+        webview.postMessage({
             command: 'update-backpack',
             foodCount: foodCount
-        } as WebviewMessage);
+        });
     }
     
     public feedPet(petName: string): void {
@@ -1086,13 +1100,29 @@ async function handleWebviewMessage(message: WebviewMessage) {
             break;
         
         case 'feed-pet':
+            console.log('Feed pet message received for pet:', message.petName);
             if (backpackState.food > 0) {
                 backpackState.food--;
+                //await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
+                console.log('Updated backpack state, remaining food:', backpackState.food);
+                
                 const panel = getPetPanel();
                 if (panel && message.petName) {
                     panel.feedPet(message.petName);
                     panel.updateBackpack(backpackState.food);
+                    console.log('Pet fed and backpack updated');
+                } else {
+                    console.log('Panel or pet name not available');
                 }
+            } else {
+                console.log('No food left in backpack');
+                // const panel = getPetPanel();
+                // if (panel) {
+                //     stateApi?.postMessage({
+                //         command: 'alert',
+                //         text: 'You have no food left in your backpack!'
+                //     });
+                // }
             }
             break;
     }

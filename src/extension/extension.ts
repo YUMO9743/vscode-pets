@@ -295,20 +295,62 @@ export function activate(context: vscode.ExtensionContext) {
     // Add to activate function
     petCollection = new PetCollection();
     backpackState = context.globalState.get<BackpackState>(BACKPACK_STATE_KEY, { food: 4 });
-    async function handleBackpackMessages(message: WebviewMessage) {
-        switch (message.command) {
-            case 'feed-pet':
-                if (backpackState.food > 0) {
-                    backpackState.food--;
-                    await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
-                    const panel = getPetPanel();
-                    if (panel && message.petName) {
-                        panel.feedPet(message.petName);
-                        panel.updateBackpack(backpackState.food);
+    
+    function registerMessageHandlers(webview: vscode.Webview) {
+        console.log('Registering message handlers for webview');
+        setupMessageHandlers(webview);
+    }
+
+    if (PetPanel.currentPanel) {
+        registerMessageHandlers(PetPanel.currentPanel.getWebview());
+    }
+    async function setupMessageHandlers(webview: vscode.Webview) {
+        console.log('Setting up message handlers for webview');
+        webview.onDidReceiveMessage(
+            async (message) => {
+                console.log('Message received from webview:', message.command, message);
+                
+                if (message.command === 'feed-pet' && message.petName) {
+                    console.log('Feed pet message received with name:', message.petName);
+                    if (backpackState.food > 0) {
+                        backpackState.food--;
+                        // 确保存储背包状态
+                        await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
+                        console.log('Updated backpack state in global state');
+                        
+                        const panel = getPetPanel();
+                        if (panel && message.petName) {
+                            console.log('Calling feedPet() on panel');
+                            panel.feedPet(message.petName);
+                            console.log('Calling updateBackpack() on panel');
+                            panel.updateBackpack(backpackState.food);
+                            console.log('Pet fed and backpack updated, remaining food:', backpackState.food);
+                        } else {
+                            console.error('Panel or pet name not available:', 
+                                panel ? 'Panel available' : 'Panel NOT available',
+                                message.petName ? 'Pet name available' : 'Pet name NOT available');
+                        }
+                    } else {
+                        console.log('No food left in backpack');
+                        vscode.window.showInformationMessage('No food left in your backpack!');
                     }
+                    return;
+                } else {
+                    await handleWebviewMessage(message);
                 }
-                break;
-        }
+            },
+            undefined,
+            context.subscriptions
+        );
+        console.log('Message handlers setup complete');
+    }
+    // if (PetPanel.currentPanel) {
+    //     setupMessageHandlers(PetPanel.currentPanel.getWebview());
+    // }
+
+
+    async function handleBackpackMessages(message: WebviewMessage) {
+        console.log('handleBackpackMessages called but not processing messages', message.command);
     }
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.show-backpack', async () => {
@@ -374,6 +416,7 @@ export function activate(context: vscode.ExtensionContext) {
                 );
 
                 if (PetPanel.currentPanel) {
+                    setupMessageHandlers(PetPanel.currentPanel.getWebview());
                     var collection = PetSpecification.collectionFromMemento(
                         context,
                         getConfiguredSize(),
@@ -430,6 +473,10 @@ export function activate(context: vscode.ExtensionContext) {
             webviewViewProvider,
         ),
     );
+
+    webviewViewProvider.onReady = (webview) => {
+        setupMessageHandlers(webview);
+    };
 
     context.subscriptions.push(
         vscode.commands.registerCommand('vscode-pets.throw-ball', () => {
@@ -819,13 +866,20 @@ class PetWebviewContainer implements IPetPanel {
     }
     
     public feedPet(petName: string): void {
+        console.log('feedPet called for:', petName);
         const pet = petCollection.locate(petName);
         if (pet) {
+            console.log('Found pet to feed:', pet);
             pet.addExperience(5);
-            void this.getWebview().postMessage({
+            console.log('Added experience, sending pet-fed message');
+
+            this.getWebview().postMessage({
                 command: 'pet-fed',
                 petName: petName
             });
+            this.updatePetStats(petName);
+        } else {
+            console.log('Pet not found in collection for feeding:', petName);
         }
     }
 
@@ -1098,33 +1152,6 @@ async function handleWebviewMessage(message: WebviewMessage) {
                 console.log('Achievement progress updated and saved');
             }
             break;
-        
-        case 'feed-pet':
-            console.log('Feed pet message received for pet:', message.petName);
-            if (backpackState.food > 0) {
-                backpackState.food--;
-                //await context.globalState.update(BACKPACK_STATE_KEY, backpackState);
-                console.log('Updated backpack state, remaining food:', backpackState.food);
-                
-                const panel = getPetPanel();
-                if (panel && message.petName) {
-                    panel.feedPet(message.petName);
-                    panel.updateBackpack(backpackState.food);
-                    console.log('Pet fed and backpack updated');
-                } else {
-                    console.log('Panel or pet name not available');
-                }
-            } else {
-                console.log('No food left in backpack');
-                // const panel = getPetPanel();
-                // if (panel) {
-                //     stateApi?.postMessage({
-                //         command: 'alert',
-                //         text: 'You have no food left in your backpack!'
-                //     });
-                // }
-            }
-            break;
     }
 }
 
@@ -1311,6 +1338,7 @@ class PetPanel extends PetWebviewContainer implements IPetPanel {
 class PetWebviewViewProvider extends PetWebviewContainer {
     public static readonly viewType = 'petsView';
     private _webviewView?: vscode.WebviewView;
+    public onReady: ((webview: vscode.Webview) => void) | undefined;
 
     resolveWebviewView(webviewView: vscode.WebviewView): void | Thenable<void> {
         this._webviewView = webviewView;
@@ -1325,6 +1353,9 @@ class PetWebviewViewProvider extends PetWebviewContainer {
             null,
             this._disposables
         );
+        if (this.onReady) {
+            this.onReady(webviewView.webview);
+        }
     }
 
     update() {

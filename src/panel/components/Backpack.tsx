@@ -9,7 +9,7 @@ interface BackpackProps {
 }
 
 const Backpack = ({ isOpen, onClose, foodCount, onFeed, pets }: BackpackProps) => {
-    if (!isOpen) return null;
+    if (!isOpen) {return null;}
 
     return (
         <div className="backpack-modal">

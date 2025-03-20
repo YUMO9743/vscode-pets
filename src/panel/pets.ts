@@ -38,7 +38,8 @@ export class PetElement {
         
         if (this.stats.experience >= this.stats.level * 20) {
             this.stats.level++;
-            this.stats.experience = 0;
+            //this.stats.experience = 0;
+            this.pet.showSpeechBubble('Level Up! 🎉', 3000);
             console.log(`${this.pet.name} leveled up to level ${this.stats.level}!`);
         }
         
@@ -48,68 +49,59 @@ export class PetElement {
     updateExperienceBar() {
         console.log(`Updating experience bar for ${this.pet.name}`);
         
-        // Remove existing bar if present
-        const existingBar = this.collision.querySelector('.pet-exp-container');
-        if (existingBar) {
-            existingBar.remove();
-        }
+        // // Remove existing bar if present
+        // const existingBar = this.collision.querySelector('.pet-exp-container');
+        // if (existingBar) {
+        //     existingBar.remove();
+        // }
         
         // Create new experience bar container
-        const expContainer = document.createElement('div');
-        expContainer.className = 'pet-exp-container';
-        expContainer.style.position = 'absolute';
-        expContainer.style.bottom = '-20px';
-        expContainer.style.left = '50%';
-        expContainer.style.transform = 'translateX(-50%)';
-        expContainer.style.width = '40px';
-        expContainer.style.background = 'rgba(0, 0, 0, 0.5)';
-        expContainer.style.borderRadius = '4px';
-        expContainer.style.padding = '2px';
-        expContainer.style.zIndex = '100';
-        
-        // Create level text
-        const expText = document.createElement('div');
-        expText.className = 'exp-text';
-        expText.style.color = 'white';
-        expText.style.fontSize = '8px';
-        expText.style.textAlign = 'center';
-        expText.style.marginBottom = '2px';
-        expText.textContent = `Lvl ${this.stats.level}`;
-        
-        // Create progress bar background
-        const expBar = document.createElement('div');
-        expBar.className = 'exp-bar';
-        expBar.style.width = '100%';
-        expBar.style.height = '4px';
-        expBar.style.background = 'rgba(255, 255, 255, 0.2)';
-        expBar.style.borderRadius = '2px';
-        expBar.style.overflow = 'hidden';
-        
-        // Create progress bar fill
-        const expProgress = document.createElement('div');
-        expProgress.className = 'exp-progress';
-        expProgress.style.height = '100%';
-        expProgress.style.background = '#4CAF50';
-        expProgress.style.transition = 'width 0.3s ease';
-        
-        // Calculate width percentage based on current experience
-        const progressPercent = (this.stats.experience / (this.stats.level * 20)) * 100;
-        expProgress.style.width = `${progressPercent}%`;
-        
-        // Assemble experience bar
-        expBar.appendChild(expProgress);
-        expContainer.appendChild(expText);
-        expContainer.appendChild(expBar);
-        
-        // Make sure collision element has the right position
-        if (this.collision.style.position !== 'relative' && 
-            this.collision.style.position !== 'absolute') {
-            this.collision.style.position = 'relative';
+        let expContainer = this.collision.querySelector('.pet-exp-container') as HTMLElement;
+    
+        // If it doesn't exist, create it
+        if (!expContainer) {
+            expContainer = document.createElement('div');
+            expContainer.className = 'pet-exp-container';
+            
+            const expText = document.createElement('div');
+            expText.className = 'exp-text';
+            expText.textContent = `Lvl ${this.stats.level}`;
+            
+            const expBar = document.createElement('div');
+            expBar.className = 'exp-bar';
+            
+            const expProgress = document.createElement('div');
+            expProgress.className = 'exp-progress';
+            
+            expBar.appendChild(expProgress);
+            expContainer.appendChild(expText);
+            expContainer.appendChild(expBar);
+            
+            this.collision.appendChild(expContainer);
         }
         
-        // Add to the DOM
-        this.collision.appendChild(expContainer);
-        console.log('Experience bar updated');
+        // Now update the experience bar
+        const expText = expContainer.querySelector('.exp-text') as HTMLElement;
+        const expProgress = expContainer.querySelector('.exp-progress') as HTMLElement;
+        
+        if (expText && expProgress) {
+            expText.textContent = `Lvl ${this.stats.level}`;
+            
+            // Calculate the percentage of experience towards the next level
+            const nextLevelThreshold = this.stats.level * 20;
+            const percentage = Math.min(100, (this.stats.experience / nextLevelThreshold) * 100);
+            
+            // Update the progress bar
+            expProgress.style.width = `${percentage}%`;
+            
+            console.log(`Updated exp bar for ${this.pet.name}: Level ${this.stats.level}, Exp: ${this.stats.experience}/${nextLevelThreshold} (${percentage}%)`);
+        }  else {
+            console.error(`Failed to update experience bar for ${this.pet.name}: Elements not found`, {
+                expContainer,
+                expText: expContainer?.querySelector('.exp-text'),
+                expProgress: expContainer?.querySelector('.exp-progress')
+            });
+        }
     }
     
     remove() {

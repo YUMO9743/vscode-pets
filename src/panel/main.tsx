@@ -21,6 +21,7 @@ import {
     InvalidPetException,
 } from './pets';
 import { BallState, PetElementState, PetPanelState } from './states';
+let globalFoodCount = 4;
 
 /* This is how the VS Code API can be invoked from the panel */
 declare global {
@@ -468,6 +469,7 @@ export function petPanelApp(
     var floor = 0;
 
     const backpackState = { food: 4 };
+    globalFoodCount = backpackState.food;
     
     if (!stateApi) {
         stateApi = acquireVsCodeApi();
@@ -749,61 +751,155 @@ export function petPanelApp(
                 console.log('Update backpack command received:', message.foodCount);
                 if (typeof message.foodCount === 'number') {
                     backpackState.food = message.foodCount;
+                    globalFoodCount = message.foodCount;
                 }
                 break;
                 
-            case 'list-pets-for-feeding':
-                console.log('List pets for feeding command received');
-                const petsForFeeding = allPets.pets;
+            function showDebugMessage(message: string) {
+                let debugContainer = document.getElementById('debug-container');
+                if (!debugContainer) {
+                    debugContainer = document.createElement('div');
+                    debugContainer.id = 'debug-container';
+                    debugContainer.style.position = 'fixed';
+                    debugContainer.style.bottom = '10px';
+                    debugContainer.style.right = '10px';
+                    debugContainer.style.width = '300px';
+                    debugContainer.style.maxHeight = '200px';
+                    debugContainer.style.overflow = 'auto';
+                    debugContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                    debugContainer.style.color = 'white';
+                    debugContainer.style.padding = '10px';
+                    debugContainer.style.borderRadius = '5px';
+                    debugContainer.style.zIndex = '1000';
+                    debugContainer.style.fontSize = '12px';
+                    document.body.appendChild(debugContainer);
+                }
                 
+                // 添加新消息
+                const msgElement = document.createElement('div');
+                msgElement.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                debugContainer.appendChild(msgElement);
+                
+                // 自动滚动到底部
+                debugContainer.scrollTop = debugContainer.scrollHeight;
+                
+                // 限制消息数量
+                while (debugContainer.childNodes.length > 20) {
+                    debugContainer.removeChild(debugContainer.firstChild as Node);
+                }
+            }
+            
+            case 'list-pets-for-feeding':
+                showDebugMessage('收到喂食宠物列表请求');
+                
+                const petsForFeeding = allPets.pets;
                 if (petsForFeeding.length === 0) {
-                    createCustomModal(
-                        'Feed Pet',
-                        '<p>No pets available to feed!</p>',
-                        [{ text: 'OK', onClick: () => {} }]
-                    );
+                    showDebugMessage('没有可喂食的宠物');
                     return;
                 }
                 
                 if (backpackState.food <= 0) {
-                    createCustomModal(
-                        'Feed Pet',
-                        '<p>You have no food left in your backpack!</p>',
-                        [{ text: 'OK', onClick: () => {} }]
-                    );
+                    showDebugMessage('背包中没有食物');
                     return;
                 }
                 
-                let petListHtml = '<p style="margin-bottom: 15px;">Select a pet to feed:</p><div style="display: flex; flex-direction: column;">';
+                const feedingContainer = document.createElement('div');
+                feedingContainer.id = 'feeding-container';
+                feedingContainer.style.position = 'fixed';
+                feedingContainer.style.top = '50%';
+                feedingContainer.style.left = '50%';
+                feedingContainer.style.transform = 'translate(-50%, -50%)';
+                feedingContainer.style.backgroundColor = 'white';
+                feedingContainer.style.padding = '20px';
+                feedingContainer.style.borderRadius = '8px';
+                feedingContainer.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                feedingContainer.style.zIndex = '1001';
+                feedingContainer.style.maxWidth = '400px';
+                feedingContainer.style.width = '80%';
                 
-                petsForFeeding.forEach((pet) => {
-                    petListHtml += `<button 
-                        style="margin-bottom: 10px; padding: 8px; text-align: left; cursor: pointer; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px;"
-                        onclick="window.feedPet('${pet.pet.name}')"
-                    >${pet.pet.name} (${pet.color} ${pet.type})</button>`;
+                // 添加标题
+                const title = document.createElement('h2');
+                title.textContent = '选择要喂食的宠物';
+                title.style.marginBottom = '15px';
+                feedingContainer.appendChild(title);
+                
+                // 添加宠物列表
+                petsForFeeding.forEach(pet => {
+                    const feedButton = document.createElement('button');
+                    feedButton.textContent = `${pet.pet.name} (${pet.color} ${pet.type})`;
+                    feedButton.style.display = 'block';
+                    feedButton.style.width = '100%';
+                    feedButton.style.padding = '10px';
+                    feedButton.style.marginBottom = '10px';
+                    feedButton.style.textAlign = 'left';
+                    feedButton.style.background = '#f5f5f5';
+                    feedButton.style.border = '1px solid #ddd';
+                    feedButton.style.borderRadius = '4px';
+                    feedButton.style.cursor = 'pointer';
+                    
+                    // 添加点击事件 - 使用直接的宠物喂食方法
+                    feedButton.onclick = function() {
+                        showDebugMessage(`点击喂食按钮: ${pet.pet.name}`);
+                        
+                        // 直接更新宠物经验值，不经过消息传递
+                        if (backpackState.food > 0) {
+                            backpackState.food--;
+                            showDebugMessage(`背包食物减少到: ${backpackState.food}`);
+                            
+                            // 直接更新宠物经验值
+                            pet.addExperience(5);
+                            showDebugMessage(`已增加宠物经验: ${pet.pet.name}`);
+                            
+                            // 更新UI
+                            pet.updateExperienceBar();
+                            pet.pet.showSpeechBubble('😋', 2000);
+                            
+                            // 显示成功消息
+                            alert(`成功喂食宠物 ${pet.pet.name}!`);
+                            
+                            // 关闭喂食面板
+                            feedingContainer.remove();
+                            
+                            // 尝试发送消息以更新背包状态
+                            try {
+                                const vscode = acquireVsCodeApi();
+                                vscode.postMessage({
+                                    command: 'update-backpack-state',
+                                    foodCount: backpackState.food,
+                                    text:''
+                                });
+                                showDebugMessage('已发送背包更新消息');
+                            } catch (error) {
+                                showDebugMessage('发送背包更新消息失败，但宠物已被喂食');
+                            }
+                        } else {
+                            showDebugMessage('没有食物可用');
+                            alert('背包中没有食物了!');
+                            feedingContainer.remove();
+                        }
+                    };
+                    
+                    feedingContainer.appendChild(feedButton);
                 });
                 
-                petListHtml += '</div>';
-                
-                // Create a global function that the buttons can call
-                window.feedPet = (petName) => {
-                    console.log('Feed pet clicked for:', petName);
-                    stateApi?.postMessage({
-                        command: 'feed-pet',
-                        petName: petName,
-                        text: `Feeding ${petName}`
-                    });
-                    
-                    // Close any existing modal
-                    const existingModal = document.getElementById('custom-modal');
-                    if (existingModal) existingModal.remove();
+                // 添加关闭按钮
+                const closeButton = document.createElement('button');
+                closeButton.textContent = '关闭';
+                closeButton.style.padding = '8px 16px';
+                closeButton.style.backgroundColor = '#007bff';
+                closeButton.style.color = 'white';
+                closeButton.style.border = 'none';
+                closeButton.style.borderRadius = '4px';
+                closeButton.style.cursor = 'pointer';
+                closeButton.style.float = 'right';
+                closeButton.onclick = function() {
+                    feedingContainer.remove();
                 };
+                feedingContainer.appendChild(closeButton);
                 
-                createCustomModal(
-                    '🍖 Feed a Pet',
-                    petListHtml,
-                    [{ text: 'Cancel', onClick: () => {} }]
-                );
+                // 添加到文档
+                document.body.appendChild(feedingContainer);
+                showDebugMessage('已显示宠物喂食面板');
                 break;
                     
 
@@ -812,16 +908,28 @@ export function petPanelApp(
                 if (message.petName) {
                     const fedPet = allPets.locate(message.petName);
                     if (fedPet) {
-                        fedPet.addExperience(5);
+                        console.log(`${message.petName} fed, updating UI`);
+                        // 确保更新经验条
                         fedPet.updateExperienceBar();
                         fedPet.pet.showSpeechBubble('😋', 2000);
                         console.log(`${message.petName} gained 5 experience!`);
                         
+                        // 显示喂食成功消息
                         createCustomModal(
                             'Pet Fed',
                             `<p>${message.petName} has been fed and gained 5 experience points!</p>
                                 <p>Current level: ${fedPet.stats.level}</p>
                                 <p>Experience: ${fedPet.stats.experience}/${fedPet.stats.level * 20}</p>`,
+                            [{ text: 'OK', onClick: () => {} }]
+                        );
+                        
+                        // 更新本地食物计数
+                        globalFoodCount = Math.max(0, globalFoodCount - 1);
+                    } else {
+                        console.log(`Pet ${message.petName} not found in collection!`);
+                        createCustomModal(
+                            'Error',
+                            `<p>Could not find pet ${message.petName}!</p>`,
                             [{ text: 'OK', onClick: () => {} }]
                         );
                     }

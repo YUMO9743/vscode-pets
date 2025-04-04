@@ -83,7 +83,7 @@ export interface PetStats {
 }
 
 export interface BackpackState {
-    food: number;
+    foodCount: number;
 }
 
 export class WebviewMessage {

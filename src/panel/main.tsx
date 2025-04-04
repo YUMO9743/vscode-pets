@@ -22,6 +22,19 @@ import {
 } from './pets';
 import { BallState, PetElementState, PetPanelState } from './states';
 let globalFoodCount = 4;
+const backpackState = { foodCount: 4 };
+let vscodeApiInstance: any = null;
+
+function getVSCodeApi() {
+    if (!vscodeApiInstance) {
+        try {
+            vscodeApiInstance = acquireVsCodeApi();
+        } catch (error) {
+            console.error('Failed to acquire VS Code API:', error);
+        }
+    }
+    return vscodeApiInstance;
+}
 
 /* This is how the VS Code API can be invoked from the panel */
 declare global {
@@ -45,7 +58,7 @@ const PetApp = () => {
     const [isBackpackOpen, setIsBackpackOpen] = useState(false);
     const [foodCount, setFoodCount] = useState(4);
     const [pets, setPets] = useState([]);
-    const vscode = acquireVsCodeApi();
+    const vscode = getVSCodeApi();
 
     useEffect(() => {
         window.addEventListener('message', (event) => {
@@ -71,7 +84,7 @@ const PetApp = () => {
                 petName: petName,
                 text: `Feeding ${petName}`
             });
-            setFoodCount(prev => prev - 1);
+            //setFoodCount(prev => prev - 1);
         }
     };
 
@@ -171,7 +184,7 @@ function startAnimations(
     stateApi?: VscodeStateApi,
 ) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
 
     collision.addEventListener('mouseover', handleMouseOver);
@@ -258,7 +271,7 @@ function addPetToPanel(
 
 export function saveState(stateApi?: VscodeStateApi) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     var state = new PetPanelState();
     state.petStates = new Array();
@@ -285,7 +298,7 @@ function recoverState(
     stateApi?: VscodeStateApi,
 ) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     var state = stateApi?.getState();
     if (!state) {
@@ -468,11 +481,10 @@ export function petPanelApp(
     const ballRadius: number = calculateBallRadius(petSize);
     var floor = 0;
 
-    const backpackState = { food: 4 };
-    globalFoodCount = backpackState.food;
+    //globalFoodCount = backpackState.foodCount;
     
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     // Apply Theme backgrounds
     const foregroundEl = document.getElementById('foreground');
@@ -741,7 +753,7 @@ export function petPanelApp(
                     '🎒 Backpack',
                     `<div style="font-size: 16px; margin-bottom: 15px;">
                         <p style="margin-bottom: 10px;"><strong>Food Items:</strong></p>
-                        <p>🍖 Food: ${backpackState.food}</p>
+                        <p>🍖 Food: ${backpackState.foodCount}</p>
                     </div>`,
                     [{ text: 'Close', onClick: () => {} }]
                 );
@@ -750,8 +762,12 @@ export function petPanelApp(
             case 'update-backpack':
                 console.log('Update backpack command received:', message.foodCount);
                 if (typeof message.foodCount === 'number') {
-                    backpackState.food = message.foodCount;
+                    backpackState.foodCount = message.foodCount;
                     globalFoodCount = message.foodCount;
+                    const foodCountElement = document.getElementById('backpack-food-count');
+                    if (foodCountElement) {
+                        foodCountElement.textContent = `${message.foodCount}`;
+                    }
                 }
                 break;
                 
@@ -798,7 +814,7 @@ export function petPanelApp(
                     return;
                 }
                 
-                if (backpackState.food <= 0) {
+                if (backpackState.foodCount <= 0) {
                     showDebugMessage('背包中没有食物');
                     return;
                 }
@@ -842,9 +858,10 @@ export function petPanelApp(
                         showDebugMessage(`点击喂食按钮: ${pet.pet.name}`);
                         
                         // 直接更新宠物经验值，不经过消息传递
-                        if (backpackState.food > 0) {
-                            backpackState.food--;
-                            showDebugMessage(`背包食物减少到: ${backpackState.food}`);
+                        if (backpackState.foodCount > 0) {
+                            backpackState.foodCount--;
+                            globalFoodCount = backpackState.foodCount;
+                            showDebugMessage(`背包食物减少到: ${backpackState.foodCount}`);
                             
                             // 直接更新宠物经验值
                             pet.addExperience(5);
@@ -854,24 +871,32 @@ export function petPanelApp(
                             pet.updateExperienceBar();
                             pet.pet.showSpeechBubble('😋', 2000);
                             
+                            // 尝试发送消息以更新背包状态
+                            try {
+                                const vscode = getVSCodeApi();
+                                if (vscode) {
+                                    vscode.postMessage({
+                                        command: 'update-backpack-state',
+                                        foodCount: backpackState.foodCount,
+                                        text: `Updating backpack food count to ${backpackState.foodCount}`
+                                    });
+                                    showDebugMessage('已发送背包更新消息');
+                                } else {
+                                    showDebugMessage('无法获取VS Code API');
+                                }
+                            } catch (error) {
+                                const errorMsg = error instanceof Error 
+                                    ? `${error.message}\n${error.stack}` 
+                                    : String(error);
+                                showDebugMessage(`发送背包更新消息失败: ${errorMsg}`);
+                            }                          
+                            
                             // 显示成功消息
-                            alert(`成功喂食宠物 ${pet.pet.name}!`);
+                            alert(`成功喂食宠物 ${pet.pet.name}! 剩余食物: ${backpackState.foodCount}`);
                             
                             // 关闭喂食面板
                             feedingContainer.remove();
                             
-                            // 尝试发送消息以更新背包状态
-                            try {
-                                const vscode = acquireVsCodeApi();
-                                vscode.postMessage({
-                                    command: 'update-backpack-state',
-                                    foodCount: backpackState.food,
-                                    text:''
-                                });
-                                showDebugMessage('已发送背包更新消息');
-                            } catch (error) {
-                                showDebugMessage('发送背包更新消息失败，但宠物已被喂食');
-                            }
                         } else {
                             showDebugMessage('没有食物可用');
                             alert('背包中没有食物了!');
@@ -913,18 +938,30 @@ export function petPanelApp(
                         fedPet.updateExperienceBar();
                         fedPet.pet.showSpeechBubble('😋', 2000);
                         console.log(`${message.petName} gained 5 experience!`);
+
+                        // 更新本地食物计数
+                        globalFoodCount = Math.max(0, globalFoodCount - 1);
+                        backpackState.foodCount = globalFoodCount;
                         
+                        // 确保发送背包更新状态消息
+                        console.log('Updating local food count and sending state update:', globalFoodCount);
+                        stateApi?.postMessage({
+                            command: 'update-backpack-state',
+                            foodCount: globalFoodCount,
+                            text: ''
+                        });
                         // 显示喂食成功消息
                         createCustomModal(
                             'Pet Fed',
                             `<p>${message.petName} has been fed and gained 5 experience points!</p>
                                 <p>Current level: ${fedPet.stats.level}</p>
-                                <p>Experience: ${fedPet.stats.experience}/${fedPet.stats.level * 20}</p>`,
+                                <p>Experience: ${fedPet.stats.experience}/${fedPet.stats.level * 20}</p>
+                                <p>Remaining food: ${globalFoodCount}</p>`,
                             [{ text: 'OK', onClick: () => {} }]
                         );
                         
                         // 更新本地食物计数
-                        globalFoodCount = Math.max(0, globalFoodCount - 1);
+                        //globalFoodCount = Math.max(0, globalFoodCount - 1);
                     } else {
                         console.log(`Pet ${message.petName} not found in collection!`);
                         createCustomModal(

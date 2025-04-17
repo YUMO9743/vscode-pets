@@ -1,5 +1,8 @@
 // This script will be run within the webview itself
 import { randomName } from '../common/names';
+import React, { useState, useEffect } from 'react';
+import Backpack from './components/Backpack';
+
 import {
     PetSize,
     PetColor,
@@ -18,16 +21,94 @@ import {
     InvalidPetException,
 } from './pets';
 import { BallState, PetElementState, PetPanelState } from './states';
+let globalFoodCount = 4;
+const backpackState = { foodCount: 4 };
+let vscodeApiInstance: any = null;
+
+function getVSCodeApi() {
+    if (!vscodeApiInstance) {
+        try {
+            vscodeApiInstance = acquireVsCodeApi();
+        } catch (error) {
+            console.error('Failed to acquire VS Code API:', error);
+        }
+    }
+    return vscodeApiInstance;
+}
 
 /* This is how the VS Code API can be invoked from the panel */
 declare global {
+    interface Window {
+        feedPet: (petName: string) => void;
+    }
+
     interface VscodeStateApi {
         getState(): PetPanelState | undefined; // API is actually Any, but we want it to be typed.
         setState(state: PetPanelState): void;
         postMessage(message: WebviewMessage): void;
     }
     function acquireVsCodeApi(): VscodeStateApi;
+
 }
+
+
+
+
+const PetApp = () => {
+    const [isBackpackOpen, setIsBackpackOpen] = useState(false);
+    const [foodCount, setFoodCount] = useState(4);
+    const [pets, setPets] = useState([]);
+    const vscode = getVSCodeApi();
+
+    useEffect(() => {
+        window.addEventListener('message', (event) => {
+            const message = event.data;
+            switch (message.command) {
+                case 'update-backpack':
+                    setFoodCount(message.foodCount);
+                    break;
+                case 'update-pets':
+                    setPets(message.pets);
+                    break;
+                case 'show-backpack':
+                    setIsBackpackOpen(true);
+                    break;
+            }
+        });
+    }, []);
+
+    const handleFeedPet = (petName: string) => {
+        if (foodCount > 0) {
+            vscode.postMessage({
+                command: 'feed-pet',
+                petName: petName,
+                text: `Feeding ${petName}`
+            });
+            //setFoodCount(prev => prev - 1);
+        }
+    };
+
+    return (
+        <>
+            <div id="petsContainer" />
+            <canvas id="petCanvas" />
+            <div id="foreground" />
+            
+            <Backpack 
+                isOpen={isBackpackOpen}
+                onClose={() => setIsBackpackOpen(false)}
+                foodCount={foodCount}
+                onFeed={handleFeedPet}
+                pets={pets}
+            />
+        </>
+    );
+};
+
+export default PetApp;
+
+
+
 
 export var allPets: IPetCollection = new PetCollection();
 var petCounter: number;
@@ -103,7 +184,7 @@ function startAnimations(
     stateApi?: VscodeStateApi,
 ) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
 
     collision.addEventListener('mouseover', handleMouseOver);
@@ -190,7 +271,7 @@ function addPetToPanel(
 
 export function saveState(stateApi?: VscodeStateApi) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     var state = new PetPanelState();
     state.petStates = new Array();
@@ -217,7 +298,7 @@ function recoverState(
     stateApi?: VscodeStateApi,
 ) {
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     var state = stateApi?.getState();
     if (!state) {
@@ -274,6 +355,13 @@ function recoverState(
     });
 }
 
+console.log('Initializing experience bars for all pets');
+setTimeout(() => {
+    allPets.pets.forEach(pet => {
+        pet.updateExperienceBar();
+    });
+}, 1000);
+
 function randomStartPosition(): number {
     return Math.floor(Math.random() * (window.innerWidth * 0.7));
 }
@@ -295,6 +383,90 @@ function initCanvas() {
     ctx.canvas.height = window.innerHeight;
 }
 
+function createCustomModal(title: string, content: string, buttons: Array<{text: string, onClick: () => void}> = []) {
+    // Remove any existing modal
+    const existingModal = document.getElementById('custom-modal');
+    if (existingModal) existingModal.remove();
+    
+    const modalContainer = document.createElement('div');
+    modalContainer.id = 'custom-modal';
+    modalContainer.style.position = 'fixed';
+    modalContainer.style.top = '0';
+    modalContainer.style.left = '0';
+    modalContainer.style.width = '100%';
+    modalContainer.style.height = '100%';
+    modalContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    modalContainer.style.display = 'flex';
+    modalContainer.style.justifyContent = 'center';
+    modalContainer.style.alignItems = 'center';
+    modalContainer.style.zIndex = '1000';
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.backgroundColor = '#fff';
+    modalContent.style.padding = '20px';
+    modalContent.style.borderRadius = '8px';
+    modalContent.style.maxWidth = '80%';
+    modalContent.style.maxHeight = '80%';
+    modalContent.style.overflow = 'auto';
+    modalContent.style.color = '#333';
+    
+    const modalHeader = document.createElement('div');
+    modalHeader.style.marginBottom = '15px';
+    modalHeader.style.paddingBottom = '10px';
+    modalHeader.style.borderBottom = '1px solid #eee';
+    modalHeader.style.display = 'flex';
+    modalHeader.style.justifyContent = 'space-between';
+    
+    const modalTitle = document.createElement('h2');
+    modalTitle.textContent = title;
+    modalTitle.style.margin = '0';
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '×';
+    closeButton.style.background = 'none';
+    closeButton.style.border = 'none';
+    closeButton.style.fontSize = '24px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.onclick = () => modalContainer.remove();
+    
+    modalHeader.appendChild(modalTitle);
+    modalHeader.appendChild(closeButton);
+    
+    const modalBody = document.createElement('div');
+    modalBody.innerHTML = content;
+    
+    const modalFooter = document.createElement('div');
+    modalFooter.style.marginTop = '15px';
+    modalFooter.style.paddingTop = '10px';
+    modalFooter.style.borderTop = '1px solid #eee';
+    modalFooter.style.display = 'flex';
+    modalFooter.style.justifyContent = 'flex-end';
+    
+    buttons.forEach(button => {
+        const btnElement = document.createElement('button');
+        btnElement.textContent = button.text;
+        btnElement.style.marginLeft = '10px';
+        btnElement.style.padding = '8px 12px';
+        btnElement.style.cursor = 'pointer';
+        btnElement.style.backgroundColor = '#007bff';
+        btnElement.style.color = 'white';
+        btnElement.style.border = 'none';
+        btnElement.style.borderRadius = '4px';
+        btnElement.onclick = () => {
+            button.onClick();
+            modalContainer.remove();
+        };
+        modalFooter.appendChild(btnElement);
+    });
+    
+    modalContent.appendChild(modalHeader);
+    modalContent.appendChild(modalBody);
+    modalContent.appendChild(modalFooter);
+    modalContainer.appendChild(modalContent);
+    
+    document.body.appendChild(modalContainer);
+}
+
 // It cannot access the main VS Code APIs directly.
 export function petPanelApp(
     basePetUri: string,
@@ -308,8 +480,11 @@ export function petPanelApp(
 ) {
     const ballRadius: number = calculateBallRadius(petSize);
     var floor = 0;
+
+    //globalFoodCount = backpackState.foodCount;
+    
     if (!stateApi) {
-        stateApi = acquireVsCodeApi();
+        stateApi = getVSCodeApi();
     }
     // Apply Theme backgrounds
     const foregroundEl = document.getElementById('foreground');
@@ -532,6 +707,11 @@ export function petPanelApp(
                         petEl.pet.chase(ballState, canvas);
                     }
                 });
+                stateApi?.postMessage({
+                    command: 'unlock-achievement',
+                    achievementId: 'first_ball',
+                    text: ''
+                });
                 break;
             case 'spawn-pet':
                 allPets.push(
@@ -547,6 +727,11 @@ export function petPanelApp(
                         stateApi,
                     ),
                 );
+                stateApi?.postMessage({
+                    command: 'unlock-achievement',
+                    achievementId: 'pet_collector',
+                    text: ''
+                });
                 saveState(stateApi);
                 break;
 
@@ -562,6 +747,232 @@ export function petPanelApp(
                 });
                 break;
 
+            case 'show-backpack':
+                console.log('Show backpack command received');
+                createCustomModal(
+                    '🎒 Backpack',
+                    `<div style="font-size: 16px; margin-bottom: 15px;">
+                        <p style="margin-bottom: 10px;"><strong>Food Items:</strong></p>
+                        <p>🍖 Food: ${backpackState.foodCount}</p>
+                    </div>`,
+                    [{ text: 'Close', onClick: () => {} }]
+                );
+                break;
+                
+            case 'update-backpack':
+                console.log('Update backpack command received:', message.foodCount);
+                if (typeof message.foodCount === 'number') {
+                    backpackState.foodCount = message.foodCount;
+                    globalFoodCount = message.foodCount;
+                    const foodCountElement = document.getElementById('backpack-food-count');
+                    if (foodCountElement) {
+                        foodCountElement.textContent = `${message.foodCount}`;
+                    }
+                }
+                break;
+                
+            function showDebugMessage(message: string) {
+                let debugContainer = document.getElementById('debug-container');
+                if (!debugContainer) {
+                    debugContainer = document.createElement('div');
+                    debugContainer.id = 'debug-container';
+                    debugContainer.style.position = 'fixed';
+                    debugContainer.style.bottom = '10px';
+                    debugContainer.style.right = '10px';
+                    debugContainer.style.width = '300px';
+                    debugContainer.style.maxHeight = '200px';
+                    debugContainer.style.overflow = 'auto';
+                    debugContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                    debugContainer.style.color = 'white';
+                    debugContainer.style.padding = '10px';
+                    debugContainer.style.borderRadius = '5px';
+                    debugContainer.style.zIndex = '1000';
+                    debugContainer.style.fontSize = '12px';
+                    document.body.appendChild(debugContainer);
+                }
+                
+                // 添加新消息
+                const msgElement = document.createElement('div');
+                msgElement.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+                debugContainer.appendChild(msgElement);
+                
+                // 自动滚动到底部
+                debugContainer.scrollTop = debugContainer.scrollHeight;
+                
+                // 限制消息数量
+                while (debugContainer.childNodes.length > 20) {
+                    debugContainer.removeChild(debugContainer.firstChild as Node);
+                }
+            }
+            
+            case 'list-pets-for-feeding':
+                showDebugMessage('收到喂食宠物列表请求');
+                
+                const petsForFeeding = allPets.pets;
+                if (petsForFeeding.length === 0) {
+                    showDebugMessage('没有可喂食的宠物');
+                    return;
+                }
+                
+                if (backpackState.foodCount <= 0) {
+                    showDebugMessage('背包中没有食物');
+                    return;
+                }
+                
+                const feedingContainer = document.createElement('div');
+                feedingContainer.id = 'feeding-container';
+                feedingContainer.style.position = 'fixed';
+                feedingContainer.style.top = '50%';
+                feedingContainer.style.left = '50%';
+                feedingContainer.style.transform = 'translate(-50%, -50%)';
+                feedingContainer.style.backgroundColor = 'white';
+                feedingContainer.style.padding = '20px';
+                feedingContainer.style.borderRadius = '8px';
+                feedingContainer.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                feedingContainer.style.zIndex = '1001';
+                feedingContainer.style.maxWidth = '400px';
+                feedingContainer.style.width = '80%';
+                
+                // 添加标题
+                const title = document.createElement('h2');
+                title.textContent = '选择要喂食的宠物';
+                title.style.marginBottom = '15px';
+                feedingContainer.appendChild(title);
+                
+                // 添加宠物列表
+                petsForFeeding.forEach(pet => {
+                    const feedButton = document.createElement('button');
+                    feedButton.textContent = `${pet.pet.name} (${pet.color} ${pet.type})`;
+                    feedButton.style.display = 'block';
+                    feedButton.style.width = '100%';
+                    feedButton.style.padding = '10px';
+                    feedButton.style.marginBottom = '10px';
+                    feedButton.style.textAlign = 'left';
+                    feedButton.style.background = '#f5f5f5';
+                    feedButton.style.border = '1px solid #ddd';
+                    feedButton.style.borderRadius = '4px';
+                    feedButton.style.cursor = 'pointer';
+                    
+                    // 添加点击事件 - 使用直接的宠物喂食方法
+                    feedButton.onclick = function() {
+                        showDebugMessage(`点击喂食按钮: ${pet.pet.name}`);
+                        
+                        // 直接更新宠物经验值，不经过消息传递
+                        if (backpackState.foodCount > 0) {
+                            backpackState.foodCount--;
+                            globalFoodCount = backpackState.foodCount;
+                            showDebugMessage(`背包食物减少到: ${backpackState.foodCount}`);
+                            
+                            // 直接更新宠物经验值
+                            pet.addExperience(5);
+                            showDebugMessage(`已增加宠物经验: ${pet.pet.name}`);
+                            
+                            // 更新UI
+                            pet.updateExperienceBar();
+                            pet.pet.showSpeechBubble('😋', 2000);
+                            
+                            // 尝试发送消息以更新背包状态
+                            try {
+                                const vscode = getVSCodeApi();
+                                if (vscode) {
+                                    vscode.postMessage({
+                                        command: 'update-backpack-state',
+                                        foodCount: backpackState.foodCount,
+                                        text: `Updating backpack food count to ${backpackState.foodCount}`
+                                    });
+                                    showDebugMessage('已发送背包更新消息');
+                                } else {
+                                    showDebugMessage('无法获取VS Code API');
+                                }
+                            } catch (error) {
+                                const errorMsg = error instanceof Error 
+                                    ? `${error.message}\n${error.stack}` 
+                                    : String(error);
+                                showDebugMessage(`发送背包更新消息失败: ${errorMsg}`);
+                            }                          
+                            
+                            // 显示成功消息
+                            alert(`成功喂食宠物 ${pet.pet.name}! 剩余食物: ${backpackState.foodCount}`);
+                            
+                            // 关闭喂食面板
+                            feedingContainer.remove();
+                            
+                        } else {
+                            showDebugMessage('没有食物可用');
+                            alert('背包中没有食物了!');
+                            feedingContainer.remove();
+                        }
+                    };
+                    
+                    feedingContainer.appendChild(feedButton);
+                });
+                
+                // 添加关闭按钮
+                const closeButton = document.createElement('button');
+                closeButton.textContent = '关闭';
+                closeButton.style.padding = '8px 16px';
+                closeButton.style.backgroundColor = '#007bff';
+                closeButton.style.color = 'white';
+                closeButton.style.border = 'none';
+                closeButton.style.borderRadius = '4px';
+                closeButton.style.cursor = 'pointer';
+                closeButton.style.float = 'right';
+                closeButton.onclick = function() {
+                    feedingContainer.remove();
+                };
+                feedingContainer.appendChild(closeButton);
+                
+                // 添加到文档
+                document.body.appendChild(feedingContainer);
+                showDebugMessage('已显示宠物喂食面板');
+                break;
+                    
+
+            case 'pet-fed':
+                console.log('Pet fed command received:', message.petName);
+                if (message.petName) {
+                    const fedPet = allPets.locate(message.petName);
+                    if (fedPet) {
+                        console.log(`${message.petName} fed, updating UI`);
+                        // 确保更新经验条
+                        fedPet.updateExperienceBar();
+                        fedPet.pet.showSpeechBubble('😋', 2000);
+                        console.log(`${message.petName} gained 5 experience!`);
+
+                        // 更新本地食物计数
+                        globalFoodCount = Math.max(0, globalFoodCount - 1);
+                        backpackState.foodCount = globalFoodCount;
+                        
+                        // 确保发送背包更新状态消息
+                        console.log('Updating local food count and sending state update:', globalFoodCount);
+                        stateApi?.postMessage({
+                            command: 'update-backpack-state',
+                            foodCount: globalFoodCount,
+                            text: ''
+                        });
+                        // 显示喂食成功消息
+                        createCustomModal(
+                            'Pet Fed',
+                            `<p>${message.petName} has been fed and gained 5 experience points!</p>
+                                <p>Current level: ${fedPet.stats.level}</p>
+                                <p>Experience: ${fedPet.stats.experience}/${fedPet.stats.level * 20}</p>
+                                <p>Remaining food: ${globalFoodCount}</p>`,
+                            [{ text: 'OK', onClick: () => {} }]
+                        );
+                        
+                        // 更新本地食物计数
+                        //globalFoodCount = Math.max(0, globalFoodCount - 1);
+                    } else {
+                        console.log(`Pet ${message.petName} not found in collection!`);
+                        createCustomModal(
+                            'Error',
+                            `<p>Could not find pet ${message.petName}!</p>`,
+                            [{ text: 'OK', onClick: () => {} }]
+                        );
+                    }
+                }
+                break;
+                
             case 'roll-call':
                 var pets = allPets.pets;
                 // go through every single

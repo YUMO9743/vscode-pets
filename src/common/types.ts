@@ -77,13 +77,38 @@ export const enum ColorThemeKind {
     highContrast = 3,
 }
 
-export class WebviewMessage {
-    text: string;
-    command: string;
+export interface PetStats {
+    level: number;
+    experience: number;
+}
 
-    constructor(text: string, command: string) {
-        this.text = text;
-        this.command = command;
+export interface BackpackState {
+    foodCount: number;
+}
+
+export class WebviewMessage {
+    text!: string;
+    command: string;
+    achievementId?: string;
+    progress?: number;
+    petId?: string;
+    amount?: number;
+    name?: string;
+    // Add new properties
+    petName?: string;
+    petStats?: PetStats;
+    foodCount?: number;
+    backpackOperation?: 'show' | 'feed';
+    currentFood?: number;
+
+    constructor(command: string, text?: string, achievementId?: string, progress?: number) {
+
+        this.command = command;        
+        if (text) {
+            this.text = text;
+        }
+        this.achievementId = achievementId;
+        this.progress = progress;
     }
 }
 

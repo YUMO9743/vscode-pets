@@ -75,6 +75,16 @@
                     "command": "vscode-pets.delete-pet",
                     "when": "view == petsView",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "vscode-pets.show-backpack",
+                    "when": "view == petsView",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "vscode-pets.feed-pet",
+                    "when": "view == petsView",
+                    "group": "navigation@3"
                 }
             ]
         },
@@ -144,6 +154,18 @@
                 "command": "vscode-pets.roll-call",
                 "title": "Roll-call",
                 "category": "Pet Coding"
+            },
+            {
+                "command": "vscode-pets.show-backpack",
+                "title": "Show Backpack",
+                "category": "Pet Coding",
+                "icon": "$(package)"
+            },
+            {
+                "command": "vscode-pets.feed-pet",
+                "title": "Feed Pet",
+                "category": "Pet Coding",
+                "icon": "$(heart)"
             }
         ],
         "configuration": [
@@ -236,6 +258,11 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Throw ball with mouse"
+                    },
+                    "vscode-pets.backpackEnabled": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Enable pet backpack feature"
                     }
                 }
             }
@@ -247,7 +274,7 @@
         "compile:extension": "tsc -p ./tsconfig.extension.json",
         "compile:test": "tsc -p ./tsconfig.test.json",
         "compile:web": "webpack",
-        "compile": "npm run compile:panel && npm run compile:extension && npm run compile:test && npm run compile:web",
+        "compile": "npm run compile:panel && npm run compile:extension && npm run compile:web",
         "watch": "webpack && tsc -watch -p ./tsconfig.extension.json",
         "watch:web": "webpack --watch",
         "pretest": "npm run compile && npm run lint",
@@ -264,6 +291,8 @@
         "@types/jsdom": "^20.0.0",
         "@types/mocha": "^9.1.1",
         "@types/node": "^18.0.0",
+        "@types/react": "^17.0.83",
+        "@types/react-dom": "^17.0.26",
         "@types/vscode": "^1.73.0",
         "@typescript-eslint/eslint-plugin": "^5.29.0",
         "@typescript-eslint/parser": "^5.29.0",
@@ -278,6 +307,7 @@
         "mocha": "^10.0.0",
         "nyc": "^15.1.0",
         "path-browserify": "^1.0.1",
+        "preact": "^10.26.2",
         "prettier": "^2.7.1",
         "process": "^0.11.10",
         "ts-loader": "^9.3.0",
@@ -288,6 +318,7 @@
         "webpack-cli": "^4.10.0"
     },
     "dependencies": {
-        "@vscode/l10n": "^0.0.10"
+        "@vscode/l10n": "^0.0.10",
+        "preact": "^10.26.2"
     }
 }

@@ -8,7 +8,7 @@ const desktopConfig = {
   mode: "development",
   devtool: "inline-source-map",
   entry: {
-    main: "./src/panel/main.ts",
+    main: "./src/panel/main.tsx",
   },
   output: {
     path: path.resolve(__dirname, './media'),
@@ -24,11 +24,15 @@ const desktopConfig = {
     })
   ],
   resolve: {
-    extensions: [".ts", ".tsx", ".js"],
+	extensions: [".ts", ".tsx", ".js", ".jsx"],  // 添加 .tsx 和 .jsx
+	alias: {
+		'react': 'preact/compat',
+		'react-dom': 'preact/compat'
+	}
   },
   module: {
     rules: [{
-      test: /\.ts$/,
+      test: /\.(ts|tsx)$/,
       exclude: /node_modules/,
       use: [
           {

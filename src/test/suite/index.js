@@ -1,25 +1,30 @@
 import * as path from 'path';
 import * as Mocha from 'mocha';
 import * as glob from 'glob';
-export function run() {
+
+export function run(): Promise<void> {
     // Create the mocha test
     const mocha = new Mocha({
         ui: 'tdd',
         color: true,
         require: ['ts-node/register', 'source-map-support/register'],
         recursive: true,
-    });
+    } as Mocha.MochaOptions);  // 添加类型断言
+
     const testsRoot = path.resolve(__dirname, '..');
-    return new Promise((c, e) => {
-        glob('**/**.test.js', { cwd: testsRoot }, (err, files) => {
+
+    return new Promise<void>((c, e) => {
+        glob('**/**.test.js', { cwd: testsRoot }, (err: Error | null, files: string[]) => {
             if (err) {
                 return e(err);
             }
+
             // Add files to the test suite
-            files.forEach((f) => mocha.addFile(path.resolve(testsRoot, f)));
+            files.forEach((f: string) => mocha.addFile(path.resolve(testsRoot, f)));
+
             try {
                 // Run the mocha test
-                mocha.run((failures) => {
+                mocha.run((failures: number) => {
                     if (failures > 0) {
                         e(new Error(`${failures} tests failed.`));
                     } else {
